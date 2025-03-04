@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Tracker PWA</title>
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        #location-status {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Location Tracker</h1>
+    <div id="location-status">Waiting for location...</div>
+    <button id="start-tracking">Start Tracking</button>
+    <button id="stop-tracking" disabled>Stop Tracking</button>
+
+    <script>
+        const statusDiv = document.getElementById('location-status');
+        const startButton = document.getElementById('start-tracking');
+        const stopButton = document.getElementById('stop-tracking');
+        let trackingInterval;
+        let deviceId = generateDeviceId();
+
+        function generateDeviceId() {
+            return 'device_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function saveLocation(latitude, longitude) {
+            fetch('/save-location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    latitude: latitude,
+                    longitude: longitude,
+                    device_id: deviceId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusDiv.textContent = `Location saved: ${latitude}, ${longitude}`;
+            })
+            .catch(error => {
+                statusDiv.textContent = `Error: ${error.message}`;
+            });
+        }
+
+        function trackLocation() {
+            if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        saveLocation(latitude, longitude);
+                    },
+                    (error) => {
+                        statusDiv.textContent = `Error: ${error.message}`;
+                    }
+                );
+            } else {
+                statusDiv.textContent = 'Geolocation not supported';
+            }
+        }
+
+        startButton.addEventListener('click', () => {
+            if ('Notification' in window) {
+                Notification.requestPermission();
+            }
+
+            trackLocation();
+            trackingInterval = setInterval(trackLocation, 5 * 60 * 1000); // 5 minutes
+
+            startButton.disabled = true;
+            stopButton.disabled = false;
+        });
+
+        stopButton.addEventListener('click', () => {
+            clearInterval(trackingInterval);
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            statusDiv.textContent = 'Tracking stopped';
+        });
+
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker registered successfully');
+                    })
+                    .catch(error => {
+                        console.log('Service Worker registration failed:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
